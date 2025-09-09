@@ -3,4 +3,4 @@ const port = 3001;
 
 app.listen(port, ()=> {
     console.log('running on http://localhost:3001')
-})
+});
