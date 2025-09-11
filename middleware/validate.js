@@ -1,7 +1,7 @@
 const validateRegistration = (req,res,next) =>{
-    const {username,password} = req.body;
-    if (!username || !password){
-         res.status(404).json({message:'Enter correct username and password'});
+    const {username,password,role} = req.body;
+    if (!username || !password || !role){
+         res.status(404).json({message:'Enter correct username,password and role'});
     }
     if(password.length >=8 ){
         next();

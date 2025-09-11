@@ -12,12 +12,12 @@ let users = [];
 
 // user registering  
 router.post('/register', (req,res) =>{
-    const {username, password} = req.body;
+    const {username, password,role} = req.body;
     if (users.find((u) =>u.username === username)){
         return res.status(400).json({message:'user already exist'});
     }
 
-    users.push({username,password});
+    users.push({username,password,role});
     res.status(201).json({message:'user registered successfully'});
 });
 
@@ -31,13 +31,13 @@ router.post('/login',validateLogin, (req,res)=>{
 
  // generating the jsonwebtoken
     const token = jwt.sign(
-        {username: user.username },
+        {username: user.username,role:user.role },
         JWT_SECRET,
         { expiresIn: '1h'}
     );
 
     res.json({message:'Loggin succesfuly',
-        user:{username:username},
+        user:{username:username,role:user.role},
         token:token
     });
 });
