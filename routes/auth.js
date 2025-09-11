@@ -1,53 +1,51 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const router = require('express').Router();
-const authenticationToken = require("../middleware/authMiddleware");
-const { validateRegistration,validateLogin } = require("../middleware/validate");
+const router = express.Router();
+const { validateRegistration, validateLogin } = require("../middleware/validate");
+const User = require('../models/User');
 
-// get JWT secret from environment
 const JWT_SECRET = process.env.JWT_SECRET;
 
-//in memory of the user 
-let users = [];
+// Register
+router.post('/register', validateRegistration, async (req,res) => {
+    try {
+        const {username, password, role} = req.body;
+        const existingUser = await User.findOne({ username });
+        if(existingUser) return res.status(400).json({message:'User already exists'});
 
-// user registering  
-router.post('/register', (req,res) =>{
-    const {username, password,role} = req.body;
-    if (users.find((u) =>u.username === username)){
-        return res.status(400).json({message:'user already exist'});
+        const user = new User({ username, password, role });
+        await user.save();
+
+        res.status(201).json({ message: 'User registered successfully' });
+    } catch(err) {
+        res.status(500).json({ message: err.message });
     }
-
-    users.push({username,password,role});
-    res.status(201).json({message:'user registered successfully'});
 });
 
-// user login 
-router.post('/login',validateLogin, (req,res)=>{
-    const {username,password} = req.body;
-    const user = users.find((u) => u.username ===username && u.password === password);
-    if(!user) {
-      return res.status(409).json({message:'Invalid credentials'});
+// Login
+router.post('/login', validateLogin, async (req,res) => {
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username });
+        if(!user) return res.status(409).json({message:'Invalid credentials'});
+
+        const isMatch = await user.comparePassword(password);
+        if(!isMatch) return res.status(409).json({message:'Invalid credentials'});
+
+        const token = jwt.sign(
+            { id: user._id, username: user.username, role: user.role },
+            JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+
+        res.json({
+            message:'Login successful',
+            user: { username: user.username, role: user.role },
+            token
+        });
+    } catch(err) {
+        res.status(500).json({ message: err.message });
     }
-
- // generating the jsonwebtoken
-    const token = jwt.sign(
-        {username: user.username,role:user.role },
-        JWT_SECRET,
-        { expiresIn: '1h'}
-    );
-
-    res.json({message:'Loggin succesfuly',
-        user:{username:username,role:user.role},
-        token:token
-    });
-});
-
-//protected route with JWT(jsonwebtoken)
-router.get('/profile',authenticationToken,(req,res) =>{
-    res.json({
-        message:'the profile is protected',
-        user: req.user
-    });
 });
 
 module.exports = router;

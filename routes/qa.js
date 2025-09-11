@@ -1,89 +1,93 @@
 const express = require('express');
 const authenticationToken = require('../middleware/authMiddleware');
 const checkRole = require('../middleware/checkRole');
+const Question = require('../models/Question');
+const Answer = require('../models/Answer');
 
 const router = express.Router();
 
-// In-memory storage
-let questions = [];
-let answers = [];  
+// ==================== INTERVIEWER ====================
 
-// interviewe can interact here and create question
-// Create question
+// Create a question
 router.post(
-  '/create-question',
-  authenticationToken,
-  checkRole('interviewer'),
-  (req, res) => {
-    const { question } = req.body;
-    if (!question) {
-      return res.status(400).json({ message: 'Question is required' });
+    '/create-question',
+    authenticationToken,
+    checkRole('interviewer'),
+    async (req,res) => {
+        try {
+            const { question } = req.body;
+            if(!question) return res.status(400).json({message:'Question is required'});
+
+            const newQuestion = new Question({
+                question,
+                createdBy: req.user.id
+            });
+            await newQuestion.save();
+
+            res.status(201).json({ message: 'Question created', question: newQuestion });
+        } catch(err) {
+            res.status(500).json({ message: err.message });
+        }
     }
-
-    const newQuestion = {
-      id: questions.length + 1,
-      question,
-      createdBy: req.user.username,
-    };
-
-    questions.push(newQuestion);
-
-    res.status(201).json({ message: 'Question created', question: newQuestion });
-  }
 );
 
-// View all responses (answers) for interviewer's questions
+// View responses
 router.get(
-  '/view-responses',
-  authenticationToken,
-  checkRole('interviewer'),
-  (req, res) => {
-    // Filter answers to only those questions created by this interviewer
-    const myQuestions = questions.filter(q => q.createdBy === req.user.username);
-    const myResponses = answers.filter(a => myQuestions.some(q => q.id === a.questionId));
+    '/view-responses',
+    authenticationToken,
+    checkRole('interviewer'),
+    async (req,res) => {
+        try {
+            const questions = await Question.find({ createdBy: req.user.id });
+            const responses = await Answer.find({ questionId: { $in: questions.map(q => q._id) } })
+                .populate('answeredBy', 'username');
 
-    res.json({ questions: myQuestions, responses: myResponses });
-  }
+            res.json({ questions, responses });
+        } catch(err) {
+            res.status(500).json({ message: err.message });
+        }
+    }
 );
 
-// here interviewee can interact and view all question asked
-// View all questions
+// ==================== INTERVIEWEE ====================
+
+// Get all questions
 router.get(
-  '/questions',
-  authenticationToken,
-  checkRole('interviewee'),
-  (req, res) => {
-    res.json({ questions });
-  }
+    '/questions',
+    authenticationToken,
+    checkRole('interviewee'),
+    async (req,res) => {
+        try {
+            const questions = await Question.find();
+            res.json({ questions });
+        } catch(err) {
+            res.status(500).json({ message: err.message });
+        }
+    }
 );
 
 // Submit an answer
 router.post(
-  '/answer',
-  authenticationToken,
-  checkRole('interviewee'),
-  (req, res) => {
-    const { questionId, answer } = req.body;
-    if (!questionId || !answer) {
-      return res.status(400).json({ message: 'Question ID and answer are required' });
+    '/answer',
+    authenticationToken,
+    checkRole('interviewee'),
+    async (req,res) => {
+        try {
+            const { questionId, answer } = req.body;
+            if(!questionId || !answer) return res.status(400).json({message:'Question ID and answer required'});
+
+            const newAnswer = new Answer({
+                questionId,
+                answer,
+                answeredBy: req.user.id
+            });
+            await newAnswer.save();
+
+            res.status(201).json({ message: 'Answer submitted', answer: newAnswer });
+        } catch(err) {
+            res.status(500).json({ message: err.message });
+        }
     }
-
-    // Check if question exists
-    const questionExists = questions.find(q => q.id === questionId);
-    if (!questionExists) {
-      return res.status(404).json({ message: 'Question not found' });
-    }
-
-    const newAnswer = {
-      questionId,
-      answer,
-      answeredBy: req.user.username,
-    };
-
-    answers.push(newAnswer);
-
-    res.status(201).json({ message: 'Answer submitted', answer: newAnswer });
-  }
 );
 
 module.exports = router;
